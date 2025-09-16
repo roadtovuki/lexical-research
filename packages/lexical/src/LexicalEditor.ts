@@ -1,4 +1,5 @@
 import { internalGetActiveEditor } from './LexicalUpdates';
+import { createEmptyEditorState } from './LexicalEditorState';
 
 export type EditorThemeClasses = {};
 
@@ -15,6 +16,7 @@ export function createEditor(editorConfig?: CreateEditorArgs): LexicalEditor {
   const parentEditor =
     editorConfig === undefined ? activeEditor : config.parentEditor || null;
   const disableEvents = config.disableEvents || false;
+  const editorState = createEmptyEditorState();
 
   const editor = new LexicalEditor();
 
