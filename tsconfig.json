@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "target": "ES2019",
+    "paths": {
+      "shared/invariant": ["./packages/shared/src/invariant.ts"]
+    }
+  }
+}
