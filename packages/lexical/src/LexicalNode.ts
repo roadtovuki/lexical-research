@@ -2,8 +2,8 @@ import { NODE_STATE_KEY } from './LexicalConstants';
 import type { Klass, KlassConstructor } from './LexicalEditor';
 import { RequiredNodeStateConfig } from './LexicalNodeState';
 import invariant from 'shared/invariant';
-import { getStaticNodeConfig } from './LexicalUtils';
-import { errorOnReadOnly } from './LexicalUpdates';
+import { getRegisteredNode, getStaticNodeConfig } from './LexicalUtils';
+import { errorOnReadOnly, getActiveEditor } from './LexicalUpdates';
 
 export type NodeMap = Map<NodeKey, LexicalNode>;
 
@@ -41,6 +41,13 @@ export type DOMConversionMap<T extends HTMLElement = HTMLElement> = Record<
   NodeName,
   DOMConversionProp<T>
 >;
+
+export type DOMExportOutput = {
+  after?: (
+    generatedElement: HTMLElement | DocumentFragment | Text | null | undefined,
+  ) => HTMLElement | DocumentFragment | Text | null | undefined;
+  element: HTMLElement | DocumentFragment | Text | null;
+};
 
 // ************ END OF DOM CONVERSION *********************
 
@@ -92,6 +99,31 @@ export type BaseStaticNodeConfig = {
   readonly [K in string]?: StaticNodeConfigValue<LexicalNode, string>;
 };
 
+function errorOnTypeKlassMismatch(
+  type: string,
+  klass: Klass<LexicalNode>,
+): void {
+  const registeredNode = getRegisteredNode(getActiveEditor(), type);
+  // Common error - split in its own invariant
+  if (registeredNode === undefined) {
+    invariant(
+      false,
+      'Create node: Attempted to create node %s that was not configured to be used on the editor.',
+      klass.name,
+    );
+  }
+  const editorKlass = registeredNode.klass;
+  if (editorKlass !== klass) {
+    invariant(
+      false,
+      'Create node: Type %s in node %s does not match registered node %s with the same type',
+      type,
+      klass.name,
+      editorKlass.name,
+    );
+  }
+}
+
 export class LexicalNode {
   ['constructor']!: KlassConstructor<typeof LexicalNode>;
   __type: string;
@@ -120,8 +152,7 @@ export class LexicalNode {
     if (__DEV__) {
       if (this.__type !== 'root') {
         errorOnReadOnly();
-        // TODO: Finish this
-        // errorOnTypeKlassMismatch(this.__type, this.constructor);
+        errorOnTypeKlassMismatch(this.__type, this.constructor);
       }
     }
   }

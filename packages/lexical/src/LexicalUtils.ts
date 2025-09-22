@@ -1,5 +1,5 @@
 import { PROTOTYPE_CONFIG_METHOD } from './LexicalConstants';
-import { Klass } from './LexicalEditor';
+import { Klass, LexicalEditor, RegisteredNode } from './LexicalEditor';
 import { LexicalNode, StaticNodeConfigValue } from './LexicalNode';
 import { DecoratorNode } from './nodes/LexicalDecoratorNode';
 import { ElementNode } from './nodes/LexicalElementNode';
@@ -97,4 +97,11 @@ export function getStaticNodeConfig(klass: Klass<LexicalNode>): {
     }
   }
   return { ownNodeConfig, ownNodeType };
+}
+
+export function getRegisteredNode(
+  editor: LexicalEditor,
+  nodeType: string,
+): undefined | RegisteredNode {
+  return editor._nodes.get(nodeType);
 }

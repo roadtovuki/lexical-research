@@ -1,6 +1,7 @@
 import { internalGetActiveEditor } from './LexicalUpdates';
 import { createEmptyEditorState } from './LexicalEditorState';
-import { LexicalNode } from './LexicalNode';
+import { DOMExportOutput, LexicalNode } from './LexicalNode';
+import { SharedNodeState } from './LexicalNodeState';
 
 // Refers to a class (the factory), not an instance
 type GenericConstructor<T> = new (...args: any[]) => T;
@@ -22,6 +23,22 @@ export type Klass<T extends LexicalNode> = InstanceType<
 
 export type EditorThemeClasses = {};
 
+export type Transform<T extends LexicalNode> = (node: T) => void;
+
+export type RegisteredNode = {
+  klass: Klass<LexicalNode>;
+  transforms: Set<Transform<LexicalNode>>;
+  replace: null | ((node: LexicalNode) => LexicalNode);
+  replaceWithKlass: null | Klass<LexicalNode>;
+  exportDOM?: (
+    editor: LexicalEditor,
+    targetNode: LexicalNode,
+  ) => DOMExportOutput;
+  sharedNodeState: SharedNodeState;
+};
+
+export type RegisteredNodes = Map<string, RegisteredNode>;
+
 export type CreateEditorArgs = {
   disableEvents?: boolean;
   parentEditor?: LexicalEditor;
@@ -42,4 +59,6 @@ export function createEditor(editorConfig?: CreateEditorArgs): LexicalEditor {
   return editor;
 }
 
-export class LexicalEditor {}
+export class LexicalEditor {
+  _nodes: RegisteredNodes;
+}

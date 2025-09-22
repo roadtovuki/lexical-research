@@ -87,3 +87,10 @@ export interface NodeStateConfig<S extends AnyStateConfig> {
 export type RequiredNodeStateConfig =
   | NodeStateConfig<AnyStateConfig>
   | AnyStateConfig;
+
+type SharedConfigMap = Map<string, AnyStateConfig>;
+
+export type SharedNodeState = {
+  sharedConfigMap: SharedConfigMap;
+  flatKeys: Set<string>;
+};
