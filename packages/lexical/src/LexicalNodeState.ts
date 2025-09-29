@@ -1,3 +1,5 @@
+import { LexicalNode } from './LexicalNode';
+
 function coerceToJSON(v: unknown): unknown {
   return v;
 }
@@ -94,3 +96,7 @@ export type SharedNodeState = {
   sharedConfigMap: SharedConfigMap;
   flatKeys: Set<string>;
 };
+
+export class NodeState<T extends LexicalNode> {
+  // TODO: Implement this
+}

@@ -1,6 +1,6 @@
 import { NODE_STATE_KEY } from './LexicalConstants';
 import type { Klass, KlassConstructor } from './LexicalEditor';
-import { RequiredNodeStateConfig } from './LexicalNodeState';
+import { NodeState, RequiredNodeStateConfig } from './LexicalNodeState';
 import invariant from 'shared/invariant';
 import { getRegisteredNode, getStaticNodeConfig } from './LexicalUtils';
 import { errorOnReadOnly, getActiveEditor } from './LexicalUpdates';
@@ -132,8 +132,7 @@ export class LexicalNode {
   __parent: null | NodeKey;
   __prev: null | NodeKey;
   __next: null | NodeKey;
-  // TODO: Finish this
-  // __state?: NodeState<this>;
+  __state?: NodeState<this>;
 
   constructor(key?: NodeKey) {
     this.__type = this.constructor.getType();
