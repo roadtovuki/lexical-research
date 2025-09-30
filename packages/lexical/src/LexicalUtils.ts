@@ -1,6 +1,11 @@
 import { HAS_DIRTY_NODES, PROTOTYPE_CONFIG_METHOD } from './LexicalConstants';
 import { Klass, LexicalEditor, RegisteredNode } from './LexicalEditor';
-import { LexicalNode, NodeKey, StaticNodeConfigValue } from './LexicalNode';
+import {
+  LexicalNode,
+  NodeKey,
+  NodeMap,
+  StaticNodeConfigValue,
+} from './LexicalNode';
 import { DecoratorNode } from './nodes/LexicalDecoratorNode';
 import { $isElementNode, ElementNode } from './nodes/LexicalElementNode';
 import invariant from 'shared/invariant';
@@ -12,6 +17,7 @@ import {
   getActiveEditorState,
   internalGetActiveEditorState,
 } from './LexicalUpdates';
+import { EditorState } from './LexicalEditorState';
 
 let pendingNodeToClone: null | LexicalNode = null;
 export function setPendingNodeToClone(pendingNode: null | LexicalNode): void {
@@ -194,7 +200,7 @@ export function $setNodeKey(
   const editorState = getActiveEditorState();
   const key = generateRandomKey();
   editorState._nodeMap.set(key, node);
-  // TODO Split this function into leaf/element
+  // EXTERNALTASK: Split this function into leaf/element
   if ($isElementNode(node)) {
     editor._dirtyElements.set(key, true);
   } else {
@@ -203,4 +209,97 @@ export function $setNodeKey(
   editor._cloneNotNeeded.add(key);
   editor._dirtyType = HAS_DIRTY_NODES;
   node.__key = key;
+}
+
+export function $getNodeByKey<T extends LexicalNode>(
+  key: NodeKey,
+  _editorState?: EditorState,
+): T | null {
+  const editorState = _editorState || getActiveEditorState();
+  const node = editorState._nodeMap.get(key) as T;
+  if (node === undefined) {
+    return null;
+  }
+  return node;
+}
+
+type IntentionallyMarkedAsDirtyElement = boolean;
+
+function internalMarkParentElementsAsDirty(
+  parentKey: NodeKey,
+  nodeMap: NodeMap,
+  dirtyElements: Map<NodeKey, IntentionallyMarkedAsDirtyElement>,
+): void {
+  let nextParentKey: string | null = parentKey;
+  while (nextParentKey !== null) {
+    if (dirtyElements.has(nextParentKey)) {
+      return;
+    }
+    const node = nodeMap.get(nextParentKey);
+    if (node === undefined) {
+      break;
+    }
+    dirtyElements.set(nextParentKey, false);
+    nextParentKey = node.__parent;
+  }
+}
+
+// Never use this function directly! It will break
+// the cloning heuristic. Instead use node.getWritable().
+export function internalMarkNodeAsDirty(node: LexicalNode): void {
+  errorOnInfiniteTransforms();
+  const latest = node.getLatest();
+  const parent = latest.__parent;
+  const editorState = getActiveEditorState();
+  const editor = getActiveEditor();
+  const nodeMap = editorState._nodeMap;
+  const dirtyElements = editor._dirtyElements;
+  if (parent !== null) {
+    internalMarkParentElementsAsDirty(parent, nodeMap, dirtyElements);
+  }
+  const key = latest.__key;
+  editor._dirtyType = HAS_DIRTY_NODES;
+  if ($isElementNode(node)) {
+    dirtyElements.set(key, true);
+  } else {
+    editor._dirtyLeaves.add(key);
+  }
+}
+
+export function $cloneWithProperties<T extends LexicalNode>(latestNode: T): T {
+  const constructor = latestNode.constructor;
+  const mutableNode = constructor.clone(latestNode) as T;
+  mutableNode.afterCloneFrom(latestNode);
+  if (__DEV__) {
+    invariant(
+      mutableNode.__key === latestNode.__key,
+      "$cloneWithProperties: %s.clone(node) (with type '%s') did not return a node with the same key, make sure to specify node.__key as the last argument to the constructor",
+      constructor.name,
+      constructor.getType(),
+    );
+    invariant(
+      mutableNode.__parent === latestNode.__parent &&
+        mutableNode.__next === latestNode.__next &&
+        mutableNode.__prev === latestNode.__prev,
+      "$cloneWithProperties: %s.clone(node) (with type '%s') overrode afterCloneFrom but did not call super.afterCloneFrom(prevNode)",
+      constructor.name,
+      constructor.getType(),
+    );
+  }
+  return mutableNode;
+}
+
+export function getRegisteredNodeOrThrow(
+  editor: LexicalEditor,
+  nodeType: string,
+): RegisteredNode {
+  const registeredNode = getRegisteredNode(editor, nodeType);
+  if (registeredNode === undefined) {
+    invariant(false, 'registeredNode: Type %s not found', nodeType);
+  }
+  return registeredNode;
+}
+
+export function $getEditor(): LexicalEditor {
+  return getActiveEditor();
 }

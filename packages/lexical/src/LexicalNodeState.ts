@@ -1,5 +1,11 @@
-import { LexicalNode } from './LexicalNode';
+import {
+  LexicalNode,
+  LexicalUpdateJSON,
+  SerializedLexicalNode,
+} from './LexicalNode';
 import invariant from 'shared/invariant';
+import { $getEditor, getRegisteredNodeOrThrow } from './LexicalUtils';
+import { NODE_STATE_KEY } from './LexicalConstants';
 
 function coerceToJSON(v: unknown): unknown {
   return v;
@@ -118,6 +124,37 @@ function computeSize(
   return size;
 }
 
+function parseAndPruneNextUnknownState(
+  sharedConfigMap: SharedConfigMap,
+  nextKnownState: KnownStateMap,
+  unknownState: undefined | UnknownStateRecord,
+): undefined | UnknownStateRecord {
+  let nextUnknownState: undefined | UnknownStateRecord = undefined;
+  if (unknownState) {
+    for (const [k, v] of Object.entries(unknownState)) {
+      const stateConfig = sharedConfigMap.get(k);
+      if (stateConfig) {
+        if (!nextKnownState.has(stateConfig)) {
+          nextKnownState.set(stateConfig, stateConfig.parse(v));
+        }
+      } else {
+        nextUnknownState = nextUnknownState || {};
+        nextUnknownState[k] = v;
+      }
+    }
+  }
+  return nextUnknownState;
+}
+
+function undefinedIfEmpty<T extends object>(obj: undefined | T): undefined | T {
+  if (obj) {
+    for (const key in obj) {
+      return obj;
+    }
+  }
+  return undefined;
+}
+
 export class NodeState<T extends LexicalNode> {
   /**
    *
@@ -214,4 +251,113 @@ export class NodeState<T extends LexicalNode> {
     }
     this.size = computedSize;
   }
+
+  getWritable(node: T): NodeState<T> {
+    if (this.node === node) {
+      return this;
+    }
+    const { sharedNodeState, unknownState } = this;
+    const nextKnownState = new Map(this.knownState);
+    return new NodeState(
+      node,
+      sharedNodeState,
+      parseAndPruneNextUnknownState(
+        sharedNodeState.sharedConfigMap,
+        nextKnownState,
+        unknownState,
+      ),
+      nextKnownState,
+      this.size,
+    );
+  }
+
+  updateFromKnown<K extends string, V>(
+    stateConfig: StateConfig<K, V>,
+    value: V,
+  ): void {
+    const key = stateConfig.key;
+    this.sharedNodeState.sharedConfigMap.set(key, stateConfig);
+    const { knownState, unknownState } = this;
+    if (
+      !(knownState.has(stateConfig) || (unknownState && key in unknownState))
+    ) {
+      if (unknownState) {
+        delete unknownState[key];
+        this.unknownState = undefinedIfEmpty(unknownState);
+      }
+      this.size++;
+    }
+    knownState.set(stateConfig, value);
+  }
+
+  updateFromUnknown(k: string, v: unknown): void {
+    const stateConfig = this.sharedNodeState.sharedConfigMap.get(k);
+    if (stateConfig) {
+      this.updateFromKnown(stateConfig, stateConfig.parse(v));
+    } else {
+      this.unknownState = this.unknownState || {};
+      if (!(k in this.unknownState)) {
+        this.size++;
+      }
+      this.unknownState[k] = v;
+    }
+  }
+
+  updateFromJSON(unknownState: undefined | UnknownStateRecord): void {
+    const { knownState } = this;
+    // Reset all known state to defaults
+    for (const stateConfig of knownState.keys()) {
+      knownState.set(stateConfig, stateConfig.defaultValue);
+    }
+    // Since we are resetting all state to this new record,
+    // the size starts at the number of known keys
+    // and will be updated as we traverse the new state
+    this.size = knownState.size;
+    this.unknownState = undefined;
+    if (unknownState) {
+      for (const [k, v] of Object.entries(unknownState)) {
+        this.updateFromUnknown(k, v);
+      }
+    }
+  }
+}
+
+export function $getSharedNodeState<T extends LexicalNode>(
+  node: T,
+): SharedNodeState {
+  return node.__state
+    ? node.__state.sharedNodeState
+    : getRegisteredNodeOrThrow($getEditor(), node.getType()).sharedNodeState;
+}
+
+export function $getWritableNodeState<T extends LexicalNode>(
+  node: T,
+): NodeState<T> {
+  const writable = node.getWritable();
+  const state = writable.__state
+    ? writable.__state.getWritable(writable)
+    : new NodeState(writable, $getSharedNodeState(writable));
+  writable.__state = state;
+  return state;
+}
+
+export function $updateStateFromJSON<T extends LexicalNode>(
+  node: T,
+  serialized: LexicalUpdateJSON<SerializedLexicalNode>,
+): T {
+  const writable = node.getWritable();
+  const unknownState = serialized[NODE_STATE_KEY];
+  let parseState = unknownState;
+  for (const k of $getSharedNodeState(writable).flatKeys) {
+    if (k in serialized) {
+      if (parseState === undefined || parseState === unknownState) {
+        parseState = { ...unknownState };
+      }
+      parseState[k] = serialized[k as keyof typeof serialized];
+    }
+  }
+  if (writable.__state || parseState) {
+    $getWritableNodeState(node).updateFromJSON(parseState);
+  }
+  return writable;
 }

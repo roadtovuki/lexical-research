@@ -1,13 +1,25 @@
 import { NODE_STATE_KEY } from './LexicalConstants';
 import type { Klass, KlassConstructor } from './LexicalEditor';
-import { NodeState, RequiredNodeStateConfig } from './LexicalNodeState';
+import {
+  $updateStateFromJSON,
+  NodeState,
+  RequiredNodeStateConfig,
+} from './LexicalNodeState';
 import invariant from 'shared/invariant';
 import {
+  $cloneWithProperties,
+  $getNodeByKey,
   $setNodeKey,
   getRegisteredNode,
   getStaticNodeConfig,
+  internalMarkNodeAsDirty,
 } from './LexicalUtils';
-import { errorOnReadOnly, getActiveEditor } from './LexicalUpdates';
+import {
+  errorOnReadOnly,
+  getActiveEditor,
+  getActiveEditorState,
+} from './LexicalUpdates';
+import { $getSelection } from './LexicalSelection';
 
 export type NodeMap = Map<NodeKey, LexicalNode>;
 
@@ -205,12 +217,59 @@ export class LexicalNode {
   updateFromJSON(
     serializedNode: LexicalUpdateJSON<SerializedLexicalNode>,
   ): this {
-    // TODO: Finish this
-    // return $updateStateFromJSON(this, serializedNode);
-    return this;
+    return $updateStateFromJSON(this, serializedNode);
   }
 
   getType(): string {
     return this.__type;
+  }
+
+  getLatest(): this {
+    const latest = $getNodeByKey<this>(this.__key);
+    if (latest === null) {
+      invariant(
+        false,
+        'Lexical node does not exist in active editor state. Avoid using the same node references between nested closures from editorState.read/editor.update.',
+      );
+    }
+    return latest;
+  }
+
+  afterCloneFrom(prevNode: this): void {
+    if (this.__key === prevNode.__key) {
+      this.__parent = prevNode.__parent;
+      this.__next = prevNode.__next;
+      this.__prev = prevNode.__prev;
+      this.__state = prevNode.__state;
+    } else if (prevNode.__state) {
+      this.__state = prevNode.__state.getWritable(this);
+    }
+  }
+
+  getWritable(): this {
+    errorOnReadOnly();
+    const editorState = getActiveEditorState();
+    const editor = getActiveEditor();
+    const nodeMap = editorState._nodeMap;
+    const key = this.__key;
+    // Ensure we get the latest node from pending state
+    const latestNode = this.getLatest();
+    const cloneNotNeeded = editor._cloneNotNeeded;
+    const selection = $getSelection();
+    if (selection !== null) {
+      selection.setCachedNodes(null);
+    }
+    if (cloneNotNeeded.has(key)) {
+      // Transforms clear the dirty node set on each iteration to keep track on newly dirty nodes
+      internalMarkNodeAsDirty(latestNode);
+      return latestNode;
+    }
+    const mutableNode = $cloneWithProperties(latestNode);
+    cloneNotNeeded.add(key);
+    internalMarkNodeAsDirty(mutableNode);
+    // Update reference in node map
+    nodeMap.set(key, mutableNode);
+
+    return mutableNode;
   }
 }
