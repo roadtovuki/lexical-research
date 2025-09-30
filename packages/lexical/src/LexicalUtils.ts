@@ -105,3 +105,13 @@ export function getRegisteredNode(
 ): undefined | RegisteredNode {
   return editor._nodes.get(nodeType);
 }
+
+export function isLexicalEditor(editor: unknown): editor is LexicalEditor {
+  // Check instanceof to prevent issues with multiple embedded Lexical installations
+  return editor instanceof LexicalEditor;
+}
+
+export function getEditorPropertyFromDOMNode(node: Node | null): unknown {
+  // @ts-expect-error: internal field
+  return node ? node.__lexicalEditor : null;
+}

@@ -60,5 +60,8 @@ export function createEditor(editorConfig?: CreateEditorArgs): LexicalEditor {
 }
 
 export class LexicalEditor {
+  /** The version with build identifiers for this editor (since 0.17.1) */
+  static version: string | undefined;
+
   _nodes: RegisteredNodes;
 }
