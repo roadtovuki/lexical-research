@@ -2,7 +2,11 @@ import { NODE_STATE_KEY } from './LexicalConstants';
 import type { Klass, KlassConstructor } from './LexicalEditor';
 import { NodeState, RequiredNodeStateConfig } from './LexicalNodeState';
 import invariant from 'shared/invariant';
-import { getRegisteredNode, getStaticNodeConfig } from './LexicalUtils';
+import {
+  $setNodeKey,
+  getRegisteredNode,
+  getStaticNodeConfig,
+} from './LexicalUtils';
 import { errorOnReadOnly, getActiveEditor } from './LexicalUpdates';
 
 export type NodeMap = Map<NodeKey, LexicalNode>;
@@ -145,8 +149,7 @@ export class LexicalNode {
       value: undefined,
       writable: true,
     });
-    // TODO: Finish this
-    // $setNodeKey(this, key);
+    $setNodeKey(this, key);
 
     if (__DEV__) {
       if (this.__type !== 'root') {
@@ -158,6 +161,17 @@ export class LexicalNode {
 
   static importDOM?: () => DOMConversionMap<any> | null;
 
+  // Flow doesn't support abstract classes unfortunately, so we can't _force_
+  // subclasses of Node to implement statics. All subclasses of Node should have
+  // a static getType and clone method though. We define getType and clone here so we can call it
+  // on any  Node, and we throw this error by default since the subclass should provide
+  // their own implementation.
+  /**
+   * Returns the string type of this node. Every node must
+   * implement this and it MUST BE UNIQUE amongst nodes registered
+   * on the editor.
+   *
+   */
   static getType(): string {
     const { ownNodeType } = getStaticNodeConfig(this);
     invariant(
@@ -194,5 +208,9 @@ export class LexicalNode {
     // TODO: Finish this
     // return $updateStateFromJSON(this, serializedNode);
     return this;
+  }
+
+  getType(): string {
+    return this.__type;
   }
 }

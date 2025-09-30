@@ -1,6 +1,6 @@
 import { internalGetActiveEditor } from './LexicalUpdates';
 import { createEmptyEditorState } from './LexicalEditorState';
-import { DOMExportOutput, LexicalNode } from './LexicalNode';
+import { DOMExportOutput, LexicalNode, NodeKey } from './LexicalNode';
 import { SharedNodeState } from './LexicalNodeState';
 
 // Refers to a class (the factory), not an instance
@@ -45,6 +45,8 @@ export type CreateEditorArgs = {
   theme?: EditorThemeClasses;
 };
 
+type IntentionallyMarkedAsDirtyElement = boolean;
+
 export function createEditor(editorConfig?: CreateEditorArgs): LexicalEditor {
   const config = editorConfig || {};
   const activeEditor = internalGetActiveEditor();
@@ -64,4 +66,8 @@ export class LexicalEditor {
   static version: string | undefined;
 
   _nodes: RegisteredNodes;
+  _dirtyType: 0 | 1 | 2;
+  _cloneNotNeeded: Set<NodeKey>;
+  _dirtyLeaves: Set<NodeKey>;
+  _dirtyElements: Map<NodeKey, IntentionallyMarkedAsDirtyElement>;
 }
