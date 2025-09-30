@@ -1,4 +1,5 @@
 import { LexicalNode } from './LexicalNode';
+import invariant from 'shared/invariant';
 
 function coerceToJSON(v: unknown): unknown {
   return v;
@@ -97,6 +98,120 @@ export type SharedNodeState = {
   flatKeys: Set<string>;
 };
 
+type KnownStateMap = Map<AnyStateConfig, unknown>;
+type UnknownStateRecord = Record<string, unknown>;
+
+function computeSize(
+  sharedConfigMap: SharedConfigMap,
+  unknownState: UnknownStateRecord | undefined,
+  knownState: KnownStateMap,
+): number {
+  let size = knownState.size;
+  if (unknownState) {
+    for (const k in unknownState) {
+      const sharedConfig = sharedConfigMap.get(k);
+      if (!sharedConfig || !knownState.has(sharedConfig)) {
+        size++;
+      }
+    }
+  }
+  return size;
+}
+
 export class NodeState<T extends LexicalNode> {
-  // TODO: Implement this
+  /**
+   *
+   *
+   * Track the (versioned) node that this NodeState was created for, to
+   * facilitate copy-on-write for NodeState. When a LexicalNode is cloned,
+   * it will *reference* the NodeState from its prevNode. From the nextNode
+   * you can continue to read state without copying, but the first $setState
+   * will trigger a copy of the prevNode's NodeState with the node property
+   * updated.
+   */
+  readonly node: LexicalNode;
+
+  /**
+   *
+   *
+   * State that has already been parsed in a get state, so it is safe. (can be returned with
+   * just a cast since the proof was given before).
+   *
+   * Note that it uses StateConfig, so in addition to (1) the CURRENT VALUE, it has access to
+   * (2) the State key (3) the DEFAULT VALUE and (4) the PARSE FUNCTION
+   */
+
+  readonly knownState: KnownStateMap;
+
+  /**
+   *
+   *
+   * A copy of serializedNode[NODE_STATE_KEY] that is made when JSON is
+   * imported but has not been parsed yet.
+   *
+   * It stays here until a get state requires us to parse it, and since we
+   * then know the value is safe we move it to knownState.
+   *
+   * Note that since only string keys are used here, we can only allow this
+   * state to pass-through on export or on the next version since there is
+   * no known value configuration. This pass-through is to support scenarios
+   * where multiple versions of the editor code are working in parallel so
+   * an old version of your code doesnt erase metadata that was
+   * set by a newer version of your code.
+   */
+
+  unknownState: undefined | UnknownStateRecord;
+
+  /**
+   *
+   *
+   * This sharedNodeState is preserved across all instances of a given
+   * node type in an editor and remains writable. It is how keys are resolved
+   * to configuration.
+   */
+
+  readonly sharedNodeState: SharedNodeState;
+
+  /**
+   *
+   *
+   * The count of known or unknown keys in this state, ignoring the
+   * intersection between the two sets.
+   */
+
+  size: number;
+
+  constructor(
+    node: T,
+    sharedNodeState: SharedNodeState,
+    unknownState: undefined | UnknownStateRecord = undefined,
+    knownState: KnownStateMap = new Map(),
+    size: number | undefined = undefined,
+  ) {
+    this.node = node;
+    this.sharedNodeState = sharedNodeState;
+    this.unknownState = unknownState;
+    this.knownState = knownState;
+    const { sharedConfigMap } = this.sharedNodeState;
+    const computedSize =
+      size !== undefined
+        ? size
+        : computeSize(sharedConfigMap, unknownState, knownState);
+    if (__DEV__) {
+      invariant(
+        size === undefined || computedSize === size,
+        'NodeState: size != computedSize (%s != %s)',
+        String(size),
+        String(computedSize),
+      );
+      for (const stateConfig of knownState.keys()) {
+        invariant(
+          sharedConfigMap.has(stateConfig.key),
+          'NodeState: sharedConfigMap missing knownState key %s',
+          stateConfig.key,
+        );
+      }
+    }
+    this.size = computedSize;
+  }
 }
