@@ -141,37 +141,21 @@ function errorOnTypeKlassMismatch(
 }
 
 export class LexicalNode {
-  ['constructor']!: KlassConstructor<typeof LexicalNode>;
+  /** @internal Allow us to look up the type including static props */
+  declare ['constructor']: KlassConstructor<typeof LexicalNode>;
+  /** @internal */
   __type: string;
+  /** @internal */
   //@ts-ignore We set the key in the constructor.
   __key: string;
+  /** @internal */
   __parent: null | NodeKey;
+  /** @internal */
   __prev: null | NodeKey;
+  /** @internal */
   __next: null | NodeKey;
+  /** @internal */
   __state?: NodeState<this>;
-
-  constructor(key?: NodeKey) {
-    this.__type = this.constructor.getType();
-    this.__parent = null;
-    this.__prev = null;
-    this.__next = null;
-    Object.defineProperty(this, '__state', {
-      configurable: true,
-      enumerable: false,
-      value: undefined,
-      writable: true,
-    });
-    $setNodeKey(this, key);
-
-    if (__DEV__) {
-      if (this.__type !== 'root') {
-        errorOnReadOnly();
-        errorOnTypeKlassMismatch(this.__type, this.constructor);
-      }
-    }
-  }
-
-  static importDOM?: () => DOMConversionMap<any> | null;
 
   // Flow doesn't support abstract classes unfortunately, so we can't _force_
   // subclasses of Node to implement statics. All subclasses of Node should have
@@ -184,6 +168,7 @@ export class LexicalNode {
    * on the editor.
    *
    */
+
   static getType(): string {
     const { ownNodeType } = getStaticNodeConfig(this);
     invariant(
@@ -208,6 +193,29 @@ export class LexicalNode {
       'LexicalNode: Node %s does not implement .importJSON().',
       this.name,
     );
+  }
+
+  static importDOM?: () => DOMConversionMap<any> | null;
+
+  constructor(key?: NodeKey) {
+    this.__type = this.constructor.getType();
+    this.__parent = null;
+    this.__prev = null;
+    this.__next = null;
+    Object.defineProperty(this, '__state', {
+      configurable: true,
+      enumerable: false,
+      value: undefined,
+      writable: true,
+    });
+    $setNodeKey(this, key);
+
+    if (__DEV__) {
+      if (this.__type !== 'root') {
+        errorOnReadOnly();
+        errorOnTypeKlassMismatch(this.__type, this.constructor);
+      }
+    }
   }
 
   $config(): BaseStaticNodeConfig {

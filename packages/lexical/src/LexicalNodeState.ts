@@ -11,6 +11,46 @@ function coerceToJSON(v: unknown): unknown {
   return v;
 }
 
+/**
+ * Configure a value to be used with StateConfig.
+ *
+ * The value type should be inferred from the definition of parse.
+ *
+ * If the value type is not JSON serializable, then unparse must also be provided.
+ *
+ * Values should be treated as immutable, much like React.useState. Mutating
+ * stored values directly will cause unpredictable behavior, is not supported,
+ * and may trigger errors in the future.
+ *
+ * @example
+ * ```ts
+ * const numberOrNullState = createState('numberOrNull', {parse: (v) => typeof v === 'number' ? v : null});
+ * //    ^? State<'numberOrNull', StateValueConfig<number | null>>
+ * const numberState = createState('number', {parse: (v) => typeof v === 'number' ? v : 0});
+ * //    ^? State<'number', StateValueConfig<number>>
+ * ```
+ *
+ * Only the parse option is required, it is generally not useful to
+ * override `unparse` or `isEqual`. However, if you are using
+ * non-primitive types such as Array, Object, Date, or something
+ * more exotic then you would want to override this. In these
+ * cases you might want to reach for third party libraries.
+ *
+ * @example
+ * ```ts
+ * const isoDateState = createState('isoDate', {
+ *   parse: (v): null | Date => {
+ *     const date = typeof v === 'string' ? new Date(v) : null;
+ *     return date && !isNaN(date.valueOf()) ? date : null;
+ *   }
+ *   isEqual: (a, b) => a === b || (a && b && a.valueOf() === b.valueOf()),
+ *   unparse: (v) => v && v.toString()
+ * });
+ * ```
+ *
+ * You may find it easier to write a parse function using libraries like
+ * zod, valibot, ajv, Effect, TypeBox, etc. perhaps with a wrapper function.
+ */
 export interface StateValueConfig<V> {
   /**
    * This function must return a default value when called with undefined,
@@ -86,6 +126,20 @@ export class StateConfig<K extends string, V> {
   }
 }
 
+/**
+ * For advanced use cases, using this type is not recommended unless
+ * it is required (due to TypeScript's lack of features like
+ * higher-kinded types).
+ *
+ * A {@link StateConfig} type with any key and any value that can be
+ * used in situations where the key and value type can not be known,
+ * such as in a generic constraint when working with a collection of
+ * StateConfig.
+ *
+ * {@link StateConfigKey} and {@link StateConfigValue} will be
+ * useful when this is used as a generic constraint.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyStateConfig = StateConfig<any, any>;
 
 export interface NodeStateConfig<S extends AnyStateConfig> {
@@ -97,8 +151,19 @@ export type RequiredNodeStateConfig =
   | NodeStateConfig<AnyStateConfig>
   | AnyStateConfig;
 
+/**
+ * @internal
+ *
+ * A Map of string keys to state configurations to be shared across nodes
+ * and/or node versions.
+ */
 type SharedConfigMap = Map<string, AnyStateConfig>;
 
+/**
+ * @internal
+ *
+ * Opaque state to be stored on the editor's RegisterNode for use by NodeState
+ */
 export type SharedNodeState = {
   sharedConfigMap: SharedConfigMap;
   flatKeys: Set<string>;

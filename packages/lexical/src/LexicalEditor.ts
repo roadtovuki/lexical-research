@@ -68,9 +68,14 @@ export class LexicalEditor {
   /** The version with build identifiers for this editor (since 0.17.1) */
   static version: string | undefined;
 
+  /** @internal */
   _nodes: RegisteredNodes;
+  /** @internal */
   _dirtyType: 0 | 1 | 2;
+  /** @internal */
   _cloneNotNeeded: Set<NodeKey>;
+  /** @internal */
   _dirtyLeaves: Set<NodeKey>;
+  /** @internal */
   _dirtyElements: Map<NodeKey, IntentionallyMarkedAsDirtyElement>;
 }
